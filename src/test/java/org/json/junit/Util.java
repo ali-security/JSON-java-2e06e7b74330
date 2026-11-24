@@ -117,4 +117,37 @@ public class Util {
             );
         }
     }
+
+    /**
+     * Runs the given body on a dedicated thread with a large (8 MB) stack and
+     * returns whatever it threw. The test JVM may be run with a small stack
+     * (for example -Xss512k), which is not always enough to descend to the
+     * default maximum nesting depth of the XML/JSONML parsers. Running deep
+     * parses on a large stack keeps "rejected by the nesting depth limit"
+     * distinguishable from "ran out of stack": a StackOverflowError is
+     * returned like any other throwable, so callers can still fail on it.
+     * @param body the code to run
+     * @return the throwable thrown by the body, or null if it completed normally
+     */
+    public static Throwable throwableFromLargeStack(final Runnable body) {
+        final Throwable[] thrown = new Throwable[1];
+        Thread thread = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    body.run();
+                } catch (Throwable t) {
+                    thrown[0] = t;
+                }
+            }
+        }, "large-stack-test", 8L * 1024L * 1024L);
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting for the large-stack test thread");
+        }
+        return thrown[0];
+    }
 }
